@@ -7,16 +7,15 @@ from datos import STOCK_INICIAL
 from datos import PEDIDOS
 
 
-INVENTARIO_INICIAL = STOCK_INICIAL
-INVENTARIO_FINAL = STOCK_INICIAL
+INVENTARIO = STOCK_INICIAL.copy()
 NUM_CAJAS = []
 
 
 def crear_pedidos(numero_pedido, producto, unidades):
-    if producto not in INVENTARIO_FINAL or unidades > INVENTARIO_FINAL[producto]:
+    if producto not in INVENTARIO or unidades > INVENTARIO[producto]:
         print(f"No quedan existencias de {producto}")
     else:
-        INVENTARIO_FINAL[producto] -= unidades
+        INVENTARIO[producto] -= unidades
 
 
 if __name__ == "__main__":
@@ -31,6 +30,6 @@ if __name__ == "__main__":
         hilo.join()
 
     print()
-    print("Inventario inicial:", INVENTARIO_INICIAL)
+    print("Inventario inicial:", STOCK_INICIAL)
     print()
-    print("Inventario final:", INVENTARIO_FINAL)
+    print("Inventario final:", INVENTARIO)
