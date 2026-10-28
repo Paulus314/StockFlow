@@ -3,12 +3,9 @@ import time
 
 import requests
 
-from datos import STOCK_INICIAL
-from datos import PEDIDOS
-
+from datos import NUM_CAJAS, PEDIDOS, STOCK_INICIAL
 
 INVENTARIO = STOCK_INICIAL.copy()
-NUM_CAJAS = []
 
 
 def crear_pedidos(numero_pedido, producto, unidades):
@@ -19,15 +16,22 @@ def crear_pedidos(numero_pedido, producto, unidades):
 
 
 if __name__ == "__main__":
+    hilos = []
+
     for pedido in PEDIDOS:
-        hilo = threading.Thread(target=crear_pedidos, args=pedido)
-        NUM_CAJAS.append(hilo)
+        tanda = [
+            threading.Thread(target=crear_pedidos, args=pedido)
+            for _ in range(NUM_CAJAS)
+        ]
+        hilos.append(tanda)
 
-    for hilo in NUM_CAJAS:
-        hilo.start()
+    for tanda in hilos:
+        for hilo in tanda:
+            hilo.start()
 
-    for hilo in NUM_CAJAS:
-        hilo.join()
+    for tanda in hilos:
+        for hilo in tanda:
+            hilo.join()
 
     print()
     print("Inventario inicial:", STOCK_INICIAL)
