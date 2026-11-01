@@ -1,11 +1,19 @@
 import threading
 import time
 
-from datos import NUM_CAJAS, NUM_TERMINALES, PEDIDOS, REPOSICIONES, STOCK_INICIAL
+from datos import (
+    NUM_CAJAS,
+    NUM_REVISORES,
+    NUM_TERMINALES,
+    PEDIDOS,
+    REPOSICIONES,
+    STOCK_INICIAL,
+)
 
 INVENTARIO = STOCK_INICIAL.copy()
 semaforo = threading.Semaphore(NUM_TERMINALES)
 condition = threading.Condition()
+barrera = threading.Barrier(NUM_REVISORES)
 
 
 def caja(pedidos):
@@ -16,6 +24,23 @@ def caja(pedidos):
 def almacen(pedidos):
     for numero_reposicion, producto, unidades in pedidos:
         procesar_reposicion(numero_reposicion, producto, unidades)
+
+
+def revisor(productos):
+    nombre = threading.current_thread().name
+
+    for producto in productos:
+        stock = INVENTARIO[producto]
+        if stock >= 0:
+            estado = "OK"
+        else:
+            estado = "ERROR: stock negativo"
+        print(f"{nombre} revisa {producto}: {stock} unidades ({estado})")
+
+    time.sleep(0.5)
+    print(f"{nombre} ha terminado y espera en la barrera")
+    barrera.wait()
+    print(f"{nombre} supera la barrera")
 
 
 def procesar_pedido(numero_pedido, producto, unidades):
@@ -58,6 +83,22 @@ if __name__ == "__main__":
         hilo.start()
 
     for hilo in hilos:
+        hilo.join()
+
+    productos = list(INVENTARIO)
+    revisores = [
+        threading.Thread(
+            target=revisor,
+            args=(productos[i::NUM_REVISORES],),
+            name=f"Revisor {i + 1}",
+        )
+        for i in range(NUM_REVISORES)
+    ]
+
+    for hilo in revisores:
+        hilo.start()
+
+    for hilo in revisores:
         hilo.join()
 
     print()
