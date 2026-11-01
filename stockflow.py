@@ -1,37 +1,44 @@
 import threading
-import time
-
-import requests
 
 from datos import NUM_CAJAS, PEDIDOS, STOCK_INICIAL
 
 INVENTARIO = STOCK_INICIAL.copy()
+lock = threading.Lock()
 
 
-def crear_pedidos(numero_pedido, producto, unidades):
-    if producto not in INVENTARIO or unidades > INVENTARIO[producto]:
-        print(f"No quedan existencias de {producto}")
+def caja(pedidos):
+    for numero_pedido, producto, unidades in pedidos:
+        procesar_pedido(numero_pedido, producto, unidades)
+
+
+def procesar_pedido(numero_pedido, producto, unidades):
+    with lock:
+        if producto not in INVENTARIO or unidades > INVENTARIO[producto]:
+            vendido = False
+        else:
+            INVENTARIO[producto] -= unidades
+            vendido = True
+
+    if vendido:
+        print(f"Pedido {numero_pedido} realizado correctamente")
     else:
-        INVENTARIO[producto] -= unidades
+        print(
+            f"Pedido {numero_pedido} no se ha podido realizar por falta de existencias de {producto}"
+        )
 
 
 if __name__ == "__main__":
     hilos = []
 
-    for pedido in PEDIDOS:
-        tanda = [
-            threading.Thread(target=crear_pedidos, args=pedido)
-            for _ in range(NUM_CAJAS)
-        ]
-        hilos.append(tanda)
+    for i in range(NUM_CAJAS):
+        hilo = threading.Thread(target=caja, args=(PEDIDOS[i::NUM_CAJAS],))
+        hilos.append(hilo)
 
-    for tanda in hilos:
-        for hilo in tanda:
-            hilo.start()
+    for hilo in hilos:
+        hilo.start()
 
-    for tanda in hilos:
-        for hilo in tanda:
-            hilo.join()
+    for hilo in hilos:
+        hilo.join()
 
     print()
     print("Inventario inicial:", STOCK_INICIAL)
