@@ -1,9 +1,11 @@
 import threading
+import time
 
-from datos import NUM_CAJAS, PEDIDOS, STOCK_INICIAL
+from datos import NUM_CAJAS, NUM_TERMINALES, PEDIDOS, STOCK_INICIAL
 
 INVENTARIO = STOCK_INICIAL.copy()
 lock = threading.Lock()
+semaforo = threading.Semaphore(NUM_TERMINALES)
 
 
 def caja(pedidos):
@@ -12,12 +14,18 @@ def caja(pedidos):
 
 
 def procesar_pedido(numero_pedido, producto, unidades):
-    with lock:
-        if producto not in INVENTARIO or unidades > INVENTARIO[producto]:
-            vendido = False
-        else:
-            INVENTARIO[producto] -= unidades
-            vendido = True
+    nombre_caja = threading.current_thread().name
+
+    with semaforo:
+        print(f"{nombre_caja} obtiene un terminal ({numero_pedido})")
+        time.sleep(0.5)
+        with lock:
+            if producto not in INVENTARIO or unidades > INVENTARIO[producto]:
+                vendido = False
+            else:
+                INVENTARIO[producto] -= unidades
+                vendido = True
+        print(f"{nombre_caja} libera un terminal ({numero_pedido})")
 
     if vendido:
         print(f"Pedido {numero_pedido} realizado correctamente")
@@ -28,11 +36,12 @@ def procesar_pedido(numero_pedido, producto, unidades):
 
 
 if __name__ == "__main__":
-    hilos = []
-
-    for i in range(NUM_CAJAS):
-        hilo = threading.Thread(target=caja, args=(PEDIDOS[i::NUM_CAJAS],))
-        hilos.append(hilo)
+    hilos = [
+        threading.Thread(
+            target=caja, args=(PEDIDOS[i::NUM_CAJAS],), name=f"Caja {i + 1}"
+        )
+        for i in range(NUM_CAJAS)
+    ]
 
     for hilo in hilos:
         hilo.start()
