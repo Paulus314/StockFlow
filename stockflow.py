@@ -10,9 +10,44 @@ from datos import (
     STOCK_INICIAL,
 )
 
-INVENTARIO = STOCK_INICIAL.copy()
+
+class GestorInventario:
+    def __init__(self, stock_inicial):
+        self._inventario = stock_inicial.copy()
+        self._lock = threading.RLock()
+        self._condition = threading.Condition(self._lock)
+
+    def consultar_stock(self, producto):
+        with self._lock:
+            return self._inventario[producto]
+
+    def hay_stock(self, producto, unidades):
+        with self._lock:
+            return self.consultar_stock(producto) >= unidades
+
+    def vender(self, numero_pedido, producto, unidades):
+        with self._condition:
+            while not self.hay_stock(producto, unidades):
+                print(f"Pedido {numero_pedido} espera reposición de {producto}")
+                self._condition.wait()
+            self._inventario[producto] -= unidades
+
+    def reponer(self, producto, unidades):
+        with self._condition:
+            self._inventario[producto] += unidades
+            self._condition.notify_all()
+
+    def productos(self):
+        with self._lock:
+            return list(self._inventario)
+
+    def copia(self):
+        with self._lock:
+            return self._inventario.copy()
+
+
+gestor = GestorInventario(STOCK_INICIAL)
 semaforo = threading.Semaphore(NUM_TERMINALES)
-condition = threading.Condition()
 barrera = threading.Barrier(NUM_REVISORES)
 
 
@@ -30,7 +65,7 @@ def revisor(productos):
     nombre = threading.current_thread().name
 
     for producto in productos:
-        stock = INVENTARIO[producto]
+        stock = gestor.consultar_stock(producto)
         if stock >= 0:
             estado = "OK"
         else:
@@ -50,11 +85,7 @@ def procesar_pedido(numero_pedido, producto, unidades):
         print(f"{nombre_caja} obtiene un terminal ({numero_pedido})")
         time.sleep(0.1)
 
-        with condition:
-            while unidades > INVENTARIO[producto]:
-                print(f"Pedido {numero_pedido} espera reposición de {producto}")
-                condition.wait()
-            INVENTARIO[producto] -= unidades
+        gestor.vender(numero_pedido, producto, unidades)
 
         print(f"Pedido {numero_pedido} realizado correctamente")
         print(f"{nombre_caja} libera un terminal ({numero_pedido})")
@@ -63,9 +94,7 @@ def procesar_pedido(numero_pedido, producto, unidades):
 def procesar_reposicion(numero_reposicion, producto, unidades):
     time.sleep(0.5)
 
-    with condition:
-        INVENTARIO[producto] += unidades
-        condition.notify_all()
+    gestor.reponer(producto, unidades)
 
     print(f"Reposición {numero_reposicion} añadió {unidades} unidades de {producto}")
 
@@ -85,7 +114,7 @@ if __name__ == "__main__":
     for hilo in hilos:
         hilo.join()
 
-    productos = list(INVENTARIO)
+    productos = gestor.productos()
     revisores = [
         threading.Thread(
             target=revisor,
@@ -104,4 +133,4 @@ if __name__ == "__main__":
     print()
     print("Inventario inicial:", STOCK_INICIAL)
     print()
-    print("Inventario final:", INVENTARIO)
+    print("Inventario final:", gestor.copia())
