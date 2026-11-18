@@ -1,14 +1,19 @@
 import threading
 import time
 
-from datos import (
+from datos_bis import (
+    CANCELACIONES,
     NUM_CAJAS,
     NUM_REVISORES,
     NUM_TERMINALES,
     PEDIDOS,
     REPOSICIONES,
     STOCK_INICIAL,
+    TIEMPO_COBRO,
+    TIEMPO_REPOSICION,
 )
+
+ESTADOS = {pedido[0]: "PENDIENTE" for pedido in PEDIDOS}
 
 
 class GestorInventario:
@@ -31,11 +36,24 @@ class GestorInventario:
                 print(f"Pedido {numero_pedido} espera reposición de {producto}")
                 self._condition.wait()
             self._inventario[producto] -= unidades
+            print(f"Pedido {numero_pedido} realizado correctamente")
+
+            for ele in ESTADOS:
+                if ele == numero_pedido:
+                    if ESTADOS[ele] != "CANCELADO":
+                        ESTADOS[ele] = "COMPLETADO"
 
     def reponer(self, producto, unidades):
         with self._condition:
             self._inventario[producto] += unidades
             self._condition.notify_all()
+
+    def cancelar(self, numero_pedido):
+        with self._condition:
+            for ele in ESTADOS:
+                if ele == numero_pedido:
+                    if ESTADOS[ele] == "PENDIENTE":
+                        ESTADOS[ele] = "CANCELADO"
 
     def productos(self):
         with self._lock:
@@ -83,20 +101,47 @@ def procesar_pedido(numero_pedido, producto, unidades):
 
     with semaforo:
         print(f"{nombre_caja} obtiene un terminal ({numero_pedido})")
-        time.sleep(0.1)
+        time.sleep(TIEMPO_COBRO)
 
         gestor.vender(numero_pedido, producto, unidades)
 
-        print(f"Pedido {numero_pedido} realizado correctamente")
         print(f"{nombre_caja} libera un terminal ({numero_pedido})")
 
 
 def procesar_reposicion(numero_reposicion, producto, unidades):
-    time.sleep(0.5)
+    time.sleep(TIEMPO_REPOSICION)
 
     gestor.reponer(producto, unidades)
 
     print(f"Reposición {numero_reposicion} añadió {unidades} unidades de {producto}")
+
+
+def cancelar(cancelaciones):
+    for numero_cancelacion, pedido, tiempo in cancelaciones:
+        procesar_cancelacion(numero_cancelacion, pedido, tiempo)
+
+
+def procesar_cancelacion(numero_cancelacion, numero_pedido, tiempo):
+    time.sleep(tiempo)
+
+    gestor.cancelar(numero_pedido)
+
+    print(f"Cancelación {numero_cancelacion} canceló el pedido {numero_pedido}")
+
+def resumen(diccionario):
+    procesados = 0
+    cancelados = 0
+    for ele in diccionario:
+        if diccionario[ele] == "COMPLETADO":
+            procesados += 1
+        elif diccionario[ele] == "CANCELADO":
+            cancelados += 1
+
+    print(f"""
+===== RESUMEN =====
+Cantidad de pedidos procesados: {procesados}
+Cantidad de pedidos cancelados: {cancelados}""")
+
 
 
 if __name__ == "__main__":
@@ -107,6 +152,10 @@ if __name__ == "__main__":
         for i in range(NUM_CAJAS)
     ]
     hilos.append(threading.Thread(target=almacen, args=(REPOSICIONES,), name="Almacén"))
+
+    hilos.append(
+        threading.Thread(target=cancelar, args=(CANCELACIONES,), name="Cancelaciones")
+    )
 
     for hilo in hilos:
         hilo.start()
@@ -131,6 +180,8 @@ if __name__ == "__main__":
         hilo.join()
 
     print()
-    print("Inventario inicial:", STOCK_INICIAL)
+    print("===== IINVENTARIO INICIAL =====\n", STOCK_INICIAL)
     print()
-    print("Inventario final:", gestor.copia())
+    print("===== INVENTARIO FINAL =====\n", gestor.copia())
+    print()
+    resumen(ESTADOS)
